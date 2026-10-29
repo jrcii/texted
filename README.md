@@ -12,11 +12,11 @@ The original icon is kept (© Jeena); the code is a from-scratch reimplementatio
   storyboards, no frameworks beyond the system.
 - **TextKit 2** (`NSTextView(usingTextLayoutManager: true)`): layout is done
   per viewport, so opening a 100 MB file doesn't lay out 100 MB of text.
-- **AVX-512 file scanning** (`Sources/CSimd`): on open, one pass over the raw
-  bytes counts lines, detects ASCII, and validates UTF-8 at ~15 GB/s
-  (64 bytes/iteration via `AVX-512BW` compare-to-mask + popcount). Falls back
-  to scalar on CPUs without AVX-512 (including arm64), selected at runtime —
-  the window subtitle shows `AVX-512` when the vector kernel ran.
+- **SIMD file scanning** (`Sources/CSimd`): on open, one pass over the raw
+  bytes counts lines, detects ASCII, and validates UTF-8, 64 bytes per
+  iteration. x86_64 uses AVX-512BW (compare-to-mask + popcount, ~15 GB/s),
+  selected at runtime with a scalar fallback; arm64 uses NEON (four 16-byte
+  vectors, byte-lane counters; ~49 GB/s on an M5 Pro vs 2.3 GB/s scalar).
 - **Single-copy ingest**: ASCII files (the common case for large ones) are
   wrapped in a zero-copy `CFString` straight off the read buffer — no decode
   pass, no intermediate Swift String. NSTextStorage makes the only copy, in
@@ -36,6 +36,7 @@ used (⌘+ / ⌘−).
 ```sh
 make          # swift build -c release + assemble TextEd.app
 make run      # build and open it
+make ARCH=arm64   # cross-build for Apple Silicon (or ARCH=x86_64)
 ```
 
 Requires macOS 12+ and a Swift toolchain. No Xcode project needed.
@@ -43,7 +44,7 @@ Requires macOS 12+ and a Swift toolchain. No Xcode project needed.
 ## Layout
 
 ```
-Sources/CSimd/     C target: te_scan() — AVX-512 + scalar byte scanner
+Sources/CSimd/     C target: te_scan() — AVX-512 / NEON / scalar byte scanner
 Sources/TextEd/    Document, menu, app delegate, main (4 small files)
 Resources/         Info.plist + the original Icon.icns
 original/          clone of the 2014 Objective-C original, for reference

@@ -9,7 +9,7 @@ typedef struct {
     size_t lines;     /* number of '\n' bytes */
     bool ascii;       /* every byte < 0x80 */
     bool valid_utf8;  /* strictly valid UTF-8 (true for empty input) */
-    bool used_avx512; /* the AVX-512 kernel ran */
+    const char *kernel; /* which scanner ran: "avx512", "neon" or "scalar" */
 } te_scan_result;
 
 /* One pass over the buffer: newline count, ASCII detection, UTF-8 validation. */

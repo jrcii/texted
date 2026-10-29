@@ -13,6 +13,11 @@
  * from the first non-ASCII chunk onward is validated by the scalar DFA —
  * that chunk is guaranteed to start on a sequence boundary because every
  * preceding chunk was ASCII.
+ *
+ * On arm64 the NEON kernel does the same 64 bytes per iteration as four
+ * 16-byte vectors: newline matches (0xFF lanes) are summed into per-lane
+ * byte counters that are flushed before they can overflow, and a horizontal
+ * max over the OR of the four vectors flags the first non-ASCII chunk.
  */
 
 /* Strict UTF-8 validation: rejects overlongs, surrogates, > U+10FFFF. */
@@ -98,20 +103,61 @@ static void scan_avx512(const uint8_t *p, size_t len, size_t *lines, size_t *fir
     *first_non_ascii = fna;
 }
 
-#endif /* __x86_64__ */
+#elif defined(__aarch64__)
+
+#include <arm_neon.h>
+
+/* Each iteration adds at most 4 to a byte lane; 63 * 4 = 252 < 256. */
+#define NEON_FLUSH_ITERS 63
+
+static void scan_neon(const uint8_t *p, size_t len, size_t *lines, size_t *first_non_ascii) {
+    const uint8x16_t nl = vdupq_n_u8('\n');
+    size_t count = 0;
+    size_t fna = (size_t)-1;
+    size_t i = 0;
+    while (i + 64 <= len) {
+        uint8x16_t acc = vdupq_n_u8(0);
+        for (int k = 0; k < NEON_FLUSH_ITERS && i + 64 <= len; k++, i += 64) {
+            uint8x16x4_t v = vld1q_u8_x4(p + i);
+            uint8x16_t eq = vaddq_u8(vaddq_u8(vceqq_u8(v.val[0], nl), vceqq_u8(v.val[1], nl)),
+                                     vaddq_u8(vceqq_u8(v.val[2], nl), vceqq_u8(v.val[3], nl)));
+            acc = vsubq_u8(acc, eq); /* each 0xFF match is -1, so subtracting adds 1 */
+            if (fna == (size_t)-1) {
+                uint8x16_t any = vorrq_u8(vorrq_u8(v.val[0], v.val[1]), vorrq_u8(v.val[2], v.val[3]));
+                if (vmaxvq_u8(any) >= 0x80) {
+                    for (size_t j = i;; j++) {
+                        if (p[j] >= 0x80) { fna = j; break; }
+                    }
+                }
+            }
+        }
+        count += vaddlvq_u8(acc);
+    }
+    for (; i < len; i++) {
+        if (p[i] == '\n') count++;
+        if (fna == (size_t)-1 && p[i] >= 0x80) fna = i;
+    }
+    *lines = count;
+    *first_non_ascii = fna;
+}
+
+#endif /* __x86_64__ / __aarch64__ */
 
 te_scan_result te_scan(const uint8_t *buf, size_t len) {
-    te_scan_result r = {0, true, true, false};
+    te_scan_result r = {0, true, true, "scalar"};
     if (buf == NULL || len == 0) return r;
 
     size_t fna = (size_t)-1;
 #if defined(__x86_64__)
     if (avx512_supported()) {
         scan_avx512(buf, len, &r.lines, &fna);
-        r.used_avx512 = true;
+        r.kernel = "avx512";
     } else {
         scan_scalar(buf, len, &r.lines, &fna);
     }
+#elif defined(__aarch64__)
+    scan_neon(buf, len, &r.lines, &fna);
+    r.kernel = "neon";
 #else
     scan_scalar(buf, len, &r.lines, &fna);
 #endif

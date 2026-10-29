@@ -1,12 +1,13 @@
 APP     := TextEd.app
-BINARY  := .build/release/TextEd
+ARCH    ?= $(shell uname -m)
+BINARY  := .build/$(ARCH)-apple-macosx/release/TextEd
 
 .PHONY: all build bundle run install clean
 
 all: bundle
 
 build:
-	swift build -c release
+	swift build -c release --arch $(ARCH)
 
 bundle: build
 	rm -rf $(APP)
