@@ -14,7 +14,8 @@ bundle: build
 	mkdir -p $(APP)/Contents/MacOS $(APP)/Contents/Resources
 	cp $(BINARY) $(APP)/Contents/MacOS/TextEd
 	cp Resources/Info.plist $(APP)/Contents/Info.plist
-	cp Resources/Assets.car Resources/TextEd.icns $(APP)/Contents/Resources/
+	cp Resources/Assets.car Resources/TextEd.icns Resources/Icon-LICENSE \
+		$(APP)/Contents/Resources/
 	codesign --force --sign - $(APP)
 
 # Recompile the Tahoe glass icon from the Icon Composer document
