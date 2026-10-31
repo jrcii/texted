@@ -8,3 +8,4 @@ TextEd.app/
 .beads-credential-key
 .beads/proxieddb/
 *.gate.lock*
+*.dmg

@@ -1,8 +1,12 @@
 APP     := TextEd.app
 ARCH    ?= $(shell uname -m)
 BINARY  := .build/$(ARCH)-apple-macosx/release/TextEd
+VERSION := $(shell /usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' Resources/Info.plist)
+DMG     := TextEd-$(VERSION)-$(ARCH).dmg
+SIGN_ID ?= Developer ID Application: John Cornell (3G8Z8FVUTL)
+NOTARY_PROFILE ?= texted-notary
 
-.PHONY: all build bundle run install clean
+.PHONY: all build bundle run install clean icon dmg notarize
 
 all: bundle
 
@@ -30,6 +34,19 @@ icon:
 
 run: bundle
 	open $(APP)
+
+# Drag-to-install disk image for a release, one per ARCH, signed with the
+# Developer ID (hardened runtime and secure timestamp, as notarization needs).
+dmg: bundle
+	codesign --force --options runtime --timestamp --sign "$(SIGN_ID)" $(APP)
+	Scripts/make-dmg.sh $(APP) $(DMG)
+	codesign --force --timestamp --sign "$(SIGN_ID)" $(DMG)
+
+# Notarize and staple the DMG. NOTARY_PROFILE is a keychain profile made once
+# with `xcrun notarytool store-credentials`.
+notarize: dmg
+	xcrun notarytool submit $(DMG) --keychain-profile $(NOTARY_PROFILE) --wait
+	xcrun stapler staple $(DMG)
 
 # Install to /Applications and stamp the custom Finder icon (the Get Info
 # paste trick, scripted) — Tahoe renders custom Finder icons bare instead

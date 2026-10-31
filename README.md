@@ -1,7 +1,9 @@
-# TextEd
+# <img src="docs/icon.png" width="64" align="center" alt=""> TextEd
 
 The goal of TextEd is to give you a GUI text editor in macOS as fast as
 theoretically possible.
+
+<img src="docs/screenshot.png" width="600" alt="An empty TextEd window in dark mode">
 
 ## Build
 
